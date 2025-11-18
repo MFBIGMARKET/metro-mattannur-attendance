@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance System</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <!-- PDF, Excel & Charting Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            --primary-color: #007BFF; --success-color: #28a745; --danger-color: #dc3545; --warning-color: #ffc107; 
+            --sidebar-bg: #212529; --content-bg-light: #f8f9fa; --content-bg-dark: #e9ecef; 
+            --dark-grey: #343a40; --white: #ffffff; --shadow: 0 10px 35px rgba(0,0,0,0.08);
+        }
+        body { font-family: 'Inter', sans-serif; margin: 0; transition: background-color 0.3s; -webkit-font-smoothing: antialiased; }
+        body.employee-view { background: linear-gradient(135deg, var(--content-bg-light), var(--content-bg-dark)); display: flex; justify-content: center; align-items: center; min-height: 100vh; color: var(--dark-grey); }
+        #employee-portal .container { background: var(--white); padding: 2rem 2.5rem 2.5rem; border-radius: 24px; box-shadow: var(--shadow); width: 100%; max-width: 400px; box-sizing: border-box; text-align: center; border: 1px solid #f0f0f0; }
+        .header-icon { width: 60px; height: 60px; margin: 0 auto 1.5rem; background: linear-gradient(135deg, #007BFF, #0056b3); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3); }
+        #employee-portal h1 { color: var(--dark-grey); margin-bottom: 0.5rem; font-weight: 600; font-size: 1.8rem; }
+        #employee-portal p { color: #6c757d; margin-bottom: 2rem; }
+        #employee-portal .input-field { width: 100%; padding: 16px; margin-bottom: 1.5rem; border: 1px solid #ced4da; border-radius: 12px; box-sizing: border-box; font-size: 1.1rem; text-align: center; font-weight: 500; }
+        #employee-portal .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; color: white; font-size: 1.1rem; cursor: pointer; transition: all 0.3s; font-weight: 500; margin-bottom: 1rem; }
+        #employee-portal .btn-secondary { background-color: #6c757d; }
+        #employee-portal .btn:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
+        #employee-portal .btn-check { background-color: var(--primary-color); }
+        #employee-portal .btn-in { background-color: var(--success-color); }
+        #employee-portal .btn-out { background-color: var(--danger-color); }
+        #employee-portal .message { margin-top: 1.5rem; font-weight: 500; min-height: 24px; }
+        .admin-icon-btn { position: fixed; bottom: 25px; right: 25px; width: 50px; height: 50px; background: var(--dark-grey); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(0,0,0,0.2); text-decoration: none; transition: all 0.3s; }
+        .admin-icon-btn:hover { transform: scale(1.1); background-color: var(--primary-color); }
+        body.admin-view { display: flex; height: 100vh; overflow: hidden; background-color: var(--content-bg-light); }
+        #admin-portal { display: flex; width: 100%; height: 100%; }
+        .sidebar { width: 260px; background-color: var(--sidebar-bg); color: var(--white); padding: 1.5rem; box-sizing: border-box; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { font-size: 1.5rem; font-weight: 600; margin-bottom: 2rem; text-align: center; }
+        .sidebar-nav a { display: flex; align-items: center; color: #adb5bd; padding: 1rem; text-decoration: none; border-radius: 8px; margin-bottom: 0.5rem; transition: all 0.3s; }
+        .sidebar-nav a .nav-icon { margin-right: 1rem; }
+        .sidebar-nav a .nav-text { display: inline; }
+        .sidebar-nav a:hover, .sidebar-nav a.active { background-color: var(--primary-color); color: var(--white); }
+        .main-content { flex-grow: 1; padding: 2rem; overflow-y: auto; }
+        .page { display: none; }
+        .page.active { display: block; }
+        .card { background: var(--white); padding: 2rem; border-radius: 15px; box-shadow: var(--shadow); margin-bottom: 2rem; }
+        #admin-portal h2 { margin-top: 0; font-weight: 600; border-bottom: 1px solid #eee; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 8px; box-sizing: border-box; }
+        #admin-portal .btn { padding: 12px 25px; border: none; border-radius: 8px; color: white; background-color: var(--primary-color); cursor: pointer; transition: background-color 0.3s; }
+        #admin-portal .btn:hover { background-color: #0056b3; }
+        .btn-delete { background-color: var(--danger-color); padding: 8px 12px; font-size: 0.9rem; }
+        .btn-delete:hover { background-color: #c82333; }
+        .report-table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; }
+        .report-table th, .report-table td { border: 1px solid #dee2e6; padding: 12px; text-align: left; }
+        .report-table th { background-color: #e9ecef; }
+        .report-table .col-id, .report-table .col-dept { width: 15%; }
+        .report-table .col-days { width: 20%; }
+        .report-actions button { margin-right: 10px; }
+        #detailed-report-summary p { margin: 4px 0; font-size: 1rem; }
+        .dashboard-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+        .dashboard-card { background: var(--white); padding: 1.5rem; border-radius: 12px; box-shadow: var(--shadow); transition: all 0.3s ease; }
+        .dashboard-card:hover { transform: translateY(-5px); box-shadow: 0 12px 28px rgba(0,0,0,0.1); }
+        .dashboard-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+        .dashboard-card-header h3 { margin: 0; font-size: 1rem; color: #6c757d; font-weight: 500; }
+        .dashboard-card-header .icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--white); }
+        .dashboard-card .count { font-size: 2.5rem; font-weight: 700; color: var(--dark-grey); }
+        .dashboard-card ul { margin: 1.5rem 0 0; padding: 0; list-style-type: none; max-height: 200px; overflow-y: auto; }
+        .dashboard-card li { padding: 0.5rem 0; border-bottom: 1px solid #f0f0f0; }
+        .dashboard-card li:last-child { border-bottom: none; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s ease; z-index: 100; }
+        .modal-overlay.visible { opacity: 1; visibility: visible; }
+        .modal-content { background: var(--white); padding: 2.5rem; border-radius: 16px; width: 100%; max-width: 500px; text-align: center; transform: scale(0.9); transition: transform 0.3s ease; }
+        .modal-overlay.visible .modal-content { transform: scale(1); }
+        .modal-content h2 { font-size: 1.6rem; margin-bottom: 1rem; color: var(--dark-grey); }
+        .modal-content p { color: #6c757d; margin-bottom: 1.5rem; }
+        .modal-content .input-field { width: 100%; padding: 14px; border-radius: 10px; border: 1px solid #ced4da; box-sizing: border-box; font-size: 1rem; text-align: center; margin-bottom: 1rem; }
+        .modal-content .btn-login { width: 100%; padding: 14px; border: none; border-radius: 10px; background: var(--primary-color); color: white; font-size: 1rem; font-weight: 500; cursor: pointer; }
+        .modal-error { color: var(--danger-color); font-size: 0.9rem; min-height: 20px; }
+        .close-modal { position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 1.5rem; color: #aaa; cursor: pointer; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); } 20%, 40%, 60%, 80% { transform: translateX(5px); } }
+        .shake { animation: shake 0.5s ease-in-out; }
+        
+        /* --- MOBILE RESPONSIVE STYLES --- */
+        @media (max-width: 992px) { .dashboard-grid { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 768px) {
+            body.admin-view { display: block; height: auto; min-height: 100vh; overflow-y: auto; padding-bottom: 60px; }
+            #admin-portal { flex-direction: column; height: auto; }
+            .sidebar { position: fixed; top: auto; bottom: 0; left: 0; width: 100%; height: 60px; flex-direction: row; align-items: center; padding: 0; z-index: 50; background-color: var(--white); box-shadow: 0 -4px 12px rgba(0,0,0,0.05); border-top: 1px solid #e9ecef; }
+            .sidebar-header { display: none; }
+            .sidebar-nav { display: flex; width: 100%; height: 100%; justify-content: space-around; }
+            .sidebar-nav a { flex-direction: column; justify-content: center; align-items: center; padding: 0.5rem; margin: 0; border-radius: 0; height: 100%; color: #6c757d; }
+            .sidebar-nav a .nav-icon { margin: 0 0 4px 0; }
+            .sidebar-nav a .nav-text { font-size: 0.65rem; font-weight: 500; }
+            .sidebar-nav a.active { color: var(--primary-color); background-color: transparent; }
+            .main-content { padding: 1rem; overflow-y: visible; }
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .dashboard-card .count { font-size: 2rem; }
+            .card { padding: 1.5rem; }
+            #employee-list-container .report-table, #employee-list-container thead, #employee-list-container tbody, #employee-list-container th, #employee-list-container td, #employee-list-container tr { display: block; }
+            #employee-list-container thead tr { position: absolute; top: -9999px; left: -9999px; }
+            #employee-list-container tr { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 1rem; background: var(--white); }
+            #employee-list-container td { border: none; border-bottom: 1px solid #eee; position: relative; padding-left: 50%; text-align: right; }
+            #employee-list-container td:before { position: absolute; top: 12px; left: 12px; width: 45%; padding-right: 10px; white-space: nowrap; text-align: left; font-weight: 600; }
+            #employee-list-container td:nth-of-type(1):before { content: "Name"; }
+            #employee-list-container td:nth-of-type(2):before { content: "ID"; }
+            #employee-list-container td:nth-of-type(3):before { content: "Department"; }
+            #employee-list-container td:nth-of-type(4) { text-align: center; padding-left: 0; border-bottom: none; }
+            #employee-list-container td:nth-of-type(4):before { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="employee-portal" style="display: none;">
+        <div class="container"><div class="header-icon"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" class="bi bi-person-check-fill" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M15.854 5.146a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L12.5 7.793l2.646-2.647a.5.5 0 0 1 .708 0z"/><path d="M1 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg></div><h1>Attendance</h1><p id="instructionText">Enter your Employee ID to begin.</p><div id="id-entry-section"><input type="text" id="employeeId" class="input-field" placeholder="e.g., EMP001"><button id="checkStatusBtn" class="btn btn-check">Check Status</button></div><div id="action-section" style="display:none; margin-top: 1.5rem;"><button id="markInBtn" class="btn btn-in">Mark In</button><button id="markOutBtn" class="btn btn-out">Mark Out</button><button id="viewMyAttendanceBtn" class="btn btn-secondary">View My Attendance</button></div><p id="message" class="message"></p></div>
+        <a href="#admin" class="admin-icon-btn" title="Admin Portal"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-shield-lock-fill" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 0c-.69 0-1.843.265-2.928.56-1.11.3-2.229.655-2.887.87a1.54 1.54 0 0 0-1.044 1.262c-.596 4.477.787 7.795 2.465 9.99a11.777 11.777 0 0 0 2.517 2.453c.386.273.744.482 1.048.625.28.132.581.19.829.19s.548-.058.829-.19c.304-.143.662-.352 1.048-.625a11.775 11.775 0 0 0 2.517-2.453c1.678-2.195 3.061-5.513 2.465-9.99a1.541 1.541 0 0 0-1.044-1.262c-.658-.215-1.777-.57-2.887-.87C9.843.266 8.69 0 8 0zm0 5a1.5 1.5 0 0 1 .5 2.915l.385 1.99a.5.5 0 0 1-.491.595h-.788a.5.5 0 0 1-.49-.595l.384-1.99A1.5 1.5 0 0 1 8 5z"/></svg></a>
+    </div>
+
+    <div id="admin-portal" style="display: none;">
+        <div class="sidebar"><div class="sidebar-header">Admin Panel</div>
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-link active"><span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg></span><span class="nav-text">Dashboard</span></a>
+                <a href="#analytics" class="nav-link"><span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg></span><span class="nav-text">Analytics</span></a>
+                <a href="#reports" class="nav-link"><span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg></span><span class="nav-text">Reports</span></a>
+                <a href="#employees" class="nav-link"><span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span><span class="nav-text">Employees</span></a>
+                <a href="#" class="nav-link"><span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></span><span class="nav-text">Exit</span></a>
+            </nav>
+        </div>
+        <main class="main-content">
+            <div id="dashboard" class="page active"><div id="live-dashboard-container" class="dashboard-grid"></div></div>
+            <div id="analytics" class="page"><div class="card"><div style="height: 320px;"><canvas id="attendanceChart"></canvas></div></div></div>
+            <div id="reports" class="page">
+                <div class="card"><h2>Manual Attendance Entry</h2><div class="form-group"><label>Employee ID</label><input type="text" id="manualEmpId"></div><div class="form-group"><label>Date</label><input type="date" id="manualDate"></div><div class="form-group"><label>Mark In Time</label><input type="time" id="manualTimeIn"></div><div class="form-group"><label>Mark Out Time</label><input type="time" id="manualTimeOut"></div><button id="manualSaveBtn" class="btn">Save Entry</button></div>
+                <div class="card"><h2>Daily Attendance Report</h2><div class="form-group"><label>Select Date</label><input type="date" id="dailyReportDate"></div><button id="generateDailyReportBtn" class="btn">Generate Daily Report</button></div><div class="card" id="daily-report-output" style="display:none;"><h3>Daily Report Results</h3><div class="report-actions" id="daily-report-actions"></div><div id="daily-report-table-container"></div></div>
+                <div class="card"><h2>Payroll Summary Report</h2><div class="form-group"><label>Start Date</label><input type="date" id="startDate"></div><div class="form-group"><label>End Date</label><input type="date" id="endDate"></div><button id="generateReportBtn" class="btn">Generate Summary</button></div><div class="card" id="report-output" style="display:none;"><h3>Summary Results</h3><div class="report-actions" id="report-actions"></div><div id="report-table-container"></div></div>
+                <div class="card"><h2>Detailed Employee Report</h2><div class="form-group"><label>Employee ID</label><input type="text" id="detailedEmployeeId"></div><div class="form-group"><label>Select Month</label><input type="month" id="reportMonth"></div><button id="generateDetailedReportBtn" class="btn">Generate Detailed Report</button></div><div class="card" id="detailed-report-output" style="display:none;"><h3>Detailed Report Results</h3><div id="detailed-report-summary"></div><div class="report-actions" id="detailed-report-actions"></div><div id="detailed-report-table-container"></div></div>
+            </div>
+            <div id="employees" class="page"><div class="card"><h2>Upload Employee Data</h2><p>Upload a CSV file with "Name", "ID", and "DEPT" columns.</p><div class="form-group"><label for="csvFile">CSV File</label><input type="file" id="csvFile" accept=".csv"></div><button id="uploadBtn" class="btn">Upload</button></div><div class="card"><h2>Manage Employees</h2><div id="employee-list-container"></div></div></div>
+        </main>
+    </div>
+
+    <div class="modal-overlay" id="loginModal"><div class="modal-content"><button class="close-modal" id="closeModalBtn">&times;</button><h2>Admin Login</h2><p>Please enter your password to continue.</p><p class="modal-error" id="modalError"></p><input type="password" id="adminPasswordInput" class="input-field" placeholder="Password"><button class="btn-login" id="modalLoginBtn">Login</button></div></div>
+    <div class="modal-overlay" id="employeeAttendanceModal"><div class="modal-content"><button class="close-modal" id="closeEmployeeModalBtn">&times;</button><h2 id="employeeModalTitle"></h2><div id="employeeModalContent"></div></div></div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+        // --- PASTE YOUR FIREBASE CONFIGURATION OBJECT HERE ---
+             const firebaseConfig = {
+  apiKey: "AIzaSyCuYD_ZH9rx6XrmEc_DDp22F5vun37dECc",
+  authDomain: "mattannur-att.firebaseapp.com",
+  projectId: "mattannur-att",
+  storageBucket: "mattannur-att.firebasestorage.app",
+  messagingSenderId: "253824306702",
+  appId: "1:253824306702:web:cf3a5bae8beb97b73e765f"
+};
+        // --- END OF FIREBASE CONFIGURATION ---
+
+        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+        const db = firebase.firestore();
+        const officeLocation = { latitude: 11.99009478553026,  longitude: 75.67557189191442 }; 
+        const allowedRadius = 60;
+        const adminPassword = "ATT#123";
+
+        const employeePortal = document.getElementById('employee-portal');
+        const adminPortal = document.getElementById('admin-portal');
+        const loginModal = document.getElementById('loginModal');
+        const adminPasswordInput = document.getElementById('adminPasswordInput');
+
+        function getTodayDate() { const d = new Date(); const month = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); return `${d.getFullYear()}-${month}-${day}`; }
+
+        function handleViewChange() { const hash = window.location.hash || '#dashboard'; if (hash.startsWith('#admin')) { if (!localStorage.getItem('isAdminAuthenticated')) { showLoginModal(); } else { showAdminPortal(); const targetId = hash.substring(6) || 'dashboard'; const link = document.querySelector(`.sidebar-nav a[href="#${targetId}"]`); if(link) { document.querySelectorAll('.sidebar-nav a').forEach(l => l.classList.remove('active')); link.classList.add('active'); document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); document.getElementById(targetId)?.classList.add('active'); if(targetId === 'dashboard') renderLiveDashboard(); else if(targetId === 'analytics') renderAnalyticsDashboard(); else if(targetId === 'employees') renderEmployeeList(); } } } else { showEmployeePortal(); } }
+        function showLoginModal() { loginModal.classList.add('visible'); adminPasswordInput.focus(); }
+        function hideLoginModal() { loginModal.classList.remove('visible'); adminPasswordInput.value = ''; document.getElementById('modalError').textContent = ''; }
+        function showAdminPortal() { document.body.className = 'admin-view'; employeePortal.style.display = 'none'; adminPortal.style.display = 'flex'; }
+        function showEmployeePortal() { document.body.className = 'employee-view'; adminPortal.style.display = 'none'; employeePortal.style.display = 'flex'; }
+
+        document.getElementById('modalLoginBtn').addEventListener('click', () => { if (adminPasswordInput.value === adminPassword) { localStorage.setItem('isAdminAuthenticated', 'true'); hideLoginModal(); window.location.hash = 'admin'; showAdminPortal(); renderLiveDashboard(); } else { const modalError = document.getElementById('modalError'); modalError.textContent = 'Incorrect password.'; adminPasswordInput.classList.add('shake'); setTimeout(() => adminPasswordInput.classList.remove('shake'), 500); } });
+        adminPasswordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('modalLoginBtn').click(); });
+        document.getElementById('closeModalBtn').addEventListener('click', () => { hideLoginModal(); window.location.hash = ''; });
+
+        const employeeIdInput = document.getElementById('employeeId');
+        const messageEl = document.getElementById('message');
+        const instructionText = document.getElementById('instructionText');
+        const actionSection = document.getElementById('action-section');
+        const markInBtn = document.getElementById('markInBtn');
+        const markOutBtn = document.getElementById('markOutBtn');
+        const checkStatusBtn = document.getElementById('checkStatusBtn');
+        const viewMyAttendanceBtn = document.getElementById('viewMyAttendanceBtn');
+
+        function showMessage(message, type = 'success') { messageEl.textContent = message; messageEl.style.color = type === 'error' ? 'var(--danger-color)' : 'var(--success-color)'; }
+        function getDistance(lat1, lon1, lat2, lon2) { const R = 6371e3; const toRad = val => val * Math.PI / 180; const dLat = toRad(lat2 - lat1); const dLon = toRad(lon2 - lon1); const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2; return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); }
+        function checkLocation(callback) { navigator.geolocation.getCurrentPosition( pos => { const distance = getDistance(officeLocation.latitude, officeLocation.longitude, pos.coords.latitude, pos.coords.longitude); if (distance <= allowedRadius) callback(true); else { showMessage(`You must be within ${allowedRadius} meters of the office.`, 'error'); callback(false); } }, () => { showMessage('Could not get your location. Please enable GPS.', 'error'); callback(false); } ); }
+        
+        checkStatusBtn.addEventListener('click', async () => {
+            const employeeId = employeeIdInput.value.trim().toUpperCase(); if (!employeeId) { return showMessage('Please enter your Employee ID.', 'error'); }
+            const today = getTodayDate(); const deviceLockId = localStorage.getItem(`deviceLocked_${today}`);
+            if (deviceLockId && deviceLockId !== employeeId) { actionSection.style.display = 'none'; instructionText.textContent = 'Action Required'; return showMessage(`This device has already been used by Employee ID: ${deviceLockId}.`, 'error'); }
+            const employeeDoc = await db.collection('employees').doc(employeeId).get(); if (!employeeDoc.exists) { return showMessage('Employee ID not found.', 'error'); }
+            const employee = employeeDoc.data(); showMessage(''); instructionText.textContent = `Welcome, ${employee.Name}!`;
+            const attendanceQuery = await db.collection('attendance').where('employeeId', '==', employeeId).where('date', '==', today).limit(1).get();
+            actionSection.style.display = 'block';
+            if (attendanceQuery.empty) {
+                markInBtn.style.display = 'block'; markOutBtn.style.display = 'none'; viewMyAttendanceBtn.style.display = 'none'; messageEl.textContent = '';
+            } else {
+                const todaysRecord = attendanceQuery.docs[0].data();
+                if (todaysRecord.markOut) {
+                    markInBtn.style.display = 'none'; markOutBtn.style.display = 'none'; viewMyAttendanceBtn.style.display = 'block'; showMessage('You have already completed your attendance for today.');
+                } else {
+                    markInBtn.style.display = 'none'; markOutBtn.style.display = 'block'; viewMyAttendanceBtn.style.display = 'block'; messageEl.textContent = 'You are currently marked in.'; messageEl.style.color = 'var(--dark-grey)';
+                }
+            }
+        });
+
+        markInBtn.addEventListener('click', () => { const employeeId = employeeIdInput.value.trim().toUpperCase(); const today = getTodayDate(); checkLocation(async (isAtOffice) => { if (isAtOffice) { const record = { employeeId, date: today, markIn: firebase.firestore.Timestamp.fromDate(new Date()), markOut: null }; await db.collection('attendance').add(record); localStorage.setItem(`deviceLocked_${today}`, employeeId); showMessage('Marked IN successfully!'); markInBtn.style.display = 'none'; markOutBtn.style.display = 'block'; viewMyAttendanceBtn.style.display = 'block'; } }); });
+        markOutBtn.addEventListener('click', async () => { const employeeId = employeeIdInput.value.trim().toUpperCase(); const today = getTodayDate(); const attendanceQuery = await db.collection('attendance').where('employeeId', '==', employeeId).where('date', '==', today).get(); if (!attendanceQuery.empty) { const docId = attendanceQuery.docs[0].id; await db.collection('attendance').doc(docId).update({ markOut: firebase.firestore.Timestamp.fromDate(new Date()) }); showMessage('Marked OUT successfully. Goodbye!'); markOutBtn.style.display = 'none'; instructionText.textContent = 'Have a great day!'; } else { showMessage('Error: Could not find your IN record.', 'error'); } });
+        employeeIdInput.addEventListener('input', () => { actionSection.style.display = 'none'; showMessage(''); instructionText.textContent = 'Enter your Employee ID to begin.'; });
+        viewMyAttendanceBtn.addEventListener('click', async () => { const employeeId = employeeIdInput.value.trim().toUpperCase(); const now = new Date(); const firstDay = new Date(now.getFullYear(), now.getMonth(), 1); const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); const attendanceQuery = await db.collection('attendance').where('employeeId', '==', employeeId).where('markIn', '>=', firstDay).where('markIn', '<=', lastDay).orderBy('markIn', 'desc').get(); const records = attendanceQuery.docs.map(doc => doc.data()); const modal = document.getElementById('employeeAttendanceModal'); document.getElementById('employeeModalTitle').textContent = `My Attendance - ${now.toLocaleString('default', { month: 'long' })}`; const content = document.getElementById('employeeModalContent'); if(records.length === 0) { content.innerHTML = '<p>No records found for this month.</p>'; } else { let table = '<table class="report-table"><thead><tr><th>Date</th><th>In</th><th>Out</th></tr></thead><tbody>'; records.forEach(rec => { table += `<tr><td>${rec.date}</td><td>${rec.markIn.toDate().toLocaleTimeString()}</td><td>${rec.markOut ? rec.markOut.toDate().toLocaleTimeString() : 'N/A'}</td></tr>`; }); table += '</tbody></table>'; content.innerHTML = table; } modal.classList.add('visible'); });
+        document.getElementById('closeEmployeeModalBtn').addEventListener('click', () => document.getElementById('employeeAttendanceModal').classList.remove('visible'));
+
+        let dashboardListener = null;
+        const navLinks = adminPortal.querySelectorAll('.nav-link');
+        
+        navLinks.forEach(link => { link.addEventListener('click', (e) => { e.preventDefault(); const targetId = link.getAttribute('href'); window.location.hash = `admin/${targetId.substring(1)}`; if(targetId === '#') { if (dashboardListener) dashboardListener(); localStorage.removeItem('isAdminAuthenticated'); window.location.hash = ''; return; } navLinks.forEach(l => l.classList.remove('active')); adminPortal.querySelectorAll('.page').forEach(p => p.classList.remove('active')); link.classList.add('active'); adminPortal.querySelector(targetId).classList.add('active'); if (targetId === '#employees') { renderEmployeeList(); } else if (targetId === '#dashboard') { renderLiveDashboard(); } else if (targetId === '#analytics') { renderAnalyticsDashboard(); } }); });
+        
+        async function renderLiveDashboard() {
+            const container = document.getElementById('live-dashboard-container'); container.innerHTML = 'Loading dashboard...';
+            const empSnapshot = await db.collection('employees').get();
+            const allEmployees = {}; empSnapshot.docs.forEach(doc => { allEmployees[doc.id] = { ...doc.data(), status: 'absent' }; });
+            const today = getTodayDate();
+            if (dashboardListener) dashboardListener();
+            dashboardListener = db.collection('attendance').where('date', '==', today).onSnapshot(attSnapshot => {
+                for (const empId in allEmployees) { allEmployees[empId].status = 'absent'; }
+                attSnapshot.docs.forEach(doc => { const rec = doc.data(); if(allEmployees[rec.employeeId]) { allEmployees[rec.employeeId].status = rec.markOut ? 'out' : 'in'; } });
+                const inList = [], outList = [], absentList = [];
+                for(const empId in allEmployees) { const emp = allEmployees[empId]; const item = `<li>${emp.Name} <span style="color: #999">(${empId})</span></li>`; if(emp.status === 'in') inList.push(item); else if(emp.status === 'out') outList.push(item); else absentList.push(item); }
+                container.innerHTML = `<div class="dashboard-card"><div class="dashboard-card-header"><h3>Currently In</h3><div class="icon" style="background: var(--success-color);"><svg fill="white" width="20" height="20" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></div></div><div class="count">${inList.length}</div><ul>${inList.join('')}</ul></div> <div class="dashboard-card"><div class="dashboard-card-header"><h3>Checked Out</h3><div class="icon" style="background: var(--primary-color);"><svg fill="white" width="20" height="20" viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></div></div><div class="count">${outList.length}</div><ul>${outList.join('')}</ul></div> <div class="dashboard-card"><div class="dashboard-card-header"><h3>Absent</h3><div class="icon" style="background: var(--danger-color);"><svg fill="white" width="20" height="20" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg></div></div><div class="count">${absentList.length}</div><ul>${absentList.join('')}</ul></div>`;
+            });
+        }
+
+        async function renderAnalyticsDashboard() {
+            const labels = []; const dataCounts = [];
+            for (let i = 6; i >= 0; i--) { const date = new Date(); date.setDate(date.getDate() - i); const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; labels.push(formattedDate.substring(5)); const snapshot = await db.collection('attendance').where('date', '==', formattedDate).get(); dataCounts.push(snapshot.size); }
+            const ctx = document.getElementById('attendanceChart').getContext('2d');
+            if(window.myAttendanceChart) window.myAttendanceChart.destroy();
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400); gradient.addColorStop(0, 'rgba(0, 123, 255, 0.5)'); gradient.addColorStop(1, 'rgba(0, 123, 255, 0)');
+            window.myAttendanceChart = new Chart(ctx, { type: 'line', data: { labels, datasets: [{ label: 'Daily Attendance Count', data: dataCounts, fill: true, backgroundColor: gradient, borderColor: 'rgba(0, 123, 255, 1)', borderWidth: 2, tension: 0.4, pointBackgroundColor: 'rgba(0, 123, 255, 1)', pointBorderColor: '#fff', pointHoverRadius: 7, pointHoverBackgroundColor: '#fff', pointHoverBorderColor: 'rgba(0, 123, 255, 1)' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#e9ecef' } }, x: { grid: { display: false } } }, plugins: { legend: { display: false }, title: { display: true, text: 'Attendance for the Last 7 Days' } } } });
+        }
+        
+        async function renderEmployeeList() { const container = document.getElementById('employee-list-container'); const snapshot = await db.collection('employees').orderBy('Name').get(); const employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); if (employees.length === 0) { container.innerHTML = "<p>No employees found.</p>"; return; } let tableHTML = `<table id="employeeListTable" class="report-table"><thead><tr><th>Name</th><th>ID</th><th>Department</th><th>Action</th></tr></thead><tbody>`; employees.forEach(emp => { tableHTML += `<tr><td>${emp.Name}</td><td>${emp.id}</td><td>${emp.DEPT || 'N/A'}</td><td><button class="btn btn-delete" data-employee-id="${emp.id}">Delete</button></td></tr>`; }); tableHTML += '</tbody></table>'; container.innerHTML = tableHTML; }
+        adminPortal.addEventListener('click', async (e) => { if (e.target.matches('.btn-delete')) { const employeeId = e.target.dataset.employeeId; if (confirm(`Are you sure you want to delete employee ${employeeId}?`)) { await db.collection('employees').doc(employeeId).delete(); renderEmployeeList(); } } });
+        document.getElementById('uploadBtn').addEventListener('click', () => { const fileInput = document.getElementById('csvFile'); if (fileInput.files.length === 0) return alert('Please select a file.'); const reader = new FileReader(); reader.onload = async (event) => { const text = event.target.result; const lines = text.split('\n'); const employees = lines.slice(1).filter(line => line.trim() !== '').map(line => { const [Name, ID, DEPT] = line.split(','); if (Name && ID && DEPT) return { Name: Name.trim(), ID: ID.trim().toUpperCase(), DEPT: DEPT.trim() }; return null; }).filter(Boolean); const batch = db.batch(); employees.forEach(emp => { const docRef = db.collection('employees').doc(emp.ID); batch.set(docRef, { Name: emp.Name, DEPT: emp.DEPT }); }); await batch.commit(); alert(`${employees.length} employees uploaded successfully!`); fileInput.value = ''; renderEmployeeList(); }; reader.readAsText(fileInput.files[0]); });
+        document.getElementById('manualSaveBtn').addEventListener('click', async () => { const empId = document.getElementById('manualEmpId').value.trim().toUpperCase(); const dateStr = document.getElementById('manualDate').value; const timeInStr = document.getElementById('manualTimeIn').value; const timeOutStr = document.getElementById('manualTimeOut').value; if (!empId || !dateStr || !timeInStr) return alert('Employee ID, Date, and Mark In time are required.'); const markInDateTime = new Date(`${dateStr}T${timeInStr}`); const markOutDateTime = timeOutStr ? new Date(`${dateStr}T${timeOutStr}`) : null; const dateForDb = dateStr; const attendanceQuery = await db.collection('attendance').where('employeeId', '==', empId).where('date', '==', dateForDb).get(); const record = { employeeId: empId, date: dateForDb, markIn: firebase.firestore.Timestamp.fromDate(markInDateTime), markOut: markOutDateTime ? firebase.firestore.Timestamp.fromDate(markOutDateTime) : null }; if (attendanceQuery.empty) { await db.collection('attendance').add(record); alert('New record created successfully.'); } else { const docId = attendanceQuery.docs[0].id; await db.collection('attendance').doc(docId).update(record); alert('Record updated successfully.'); } });
+        
+        let cachedData = { allAttendance: [], allEmployees: [], timestamp: null };
+        async function fetchAllDataForReport() { const now = new Date(); const [attSnapshot, empSnapshot] = await Promise.all([db.collection('attendance').get(), db.collection('employees').get()]); const allAttendance = attSnapshot.docs.map(doc => ({...doc.data(), markIn: doc.data().markIn?.toDate(), markOut: doc.data().markOut?.toDate()})); const allEmployees = empSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); return { allAttendance, allEmployees }; }
+
+        document.getElementById('generateDailyReportBtn').addEventListener('click', async () => { const selectedDateInput = document.getElementById('dailyReportDate').value; if (!selectedDateInput) { return alert('Please select a date.'); } const { allAttendance, allEmployees } = await fetchAllDataForReport(); const dailyRecords = allAttendance.filter(rec => rec.date === selectedDateInput); displayDailyReport(dailyRecords, allEmployees); });
+        function displayDailyReport(data, employees) { const outputDiv = document.getElementById('daily-report-output'); const tableContainer = document.getElementById('daily-report-table-container'); const actionsContainer = document.getElementById('daily-report-actions'); if (data.length === 0) { tableContainer.innerHTML = "<p>No records found.</p>"; actionsContainer.innerHTML = ""; } else { const empMap = new Map(employees.map(e => [e.id, e.Name])); let table = `<table id="dailyReportTable" class="report-table"><thead><tr><th>ID</th><th>Name</th><th>In Time</th><th>Out Time</th></tr></thead><tbody>`; data.forEach(rec => { table += `<tr><td>${rec.employeeId}</td><td>${empMap.get(rec.employeeId) || 'N/A'}</td><td>${rec.markIn.toLocaleTimeString()}</td><td>${rec.markOut ? rec.markOut.toLocaleTimeString() : 'N/A'}</td></tr>`; }); table += '</tbody></table>'; tableContainer.innerHTML = table; actionsContainer.innerHTML = `<button class="btn" onclick="downloadTableAsPDF('dailyReportTable', 'Daily_Report')">PDF</button> <button class="btn" onclick="downloadTableAsExcel('dailyReportTable', 'Daily_Report')">Excel</button>`; } outputDiv.style.display = 'block'; }
+        
+        document.getElementById('generateReportBtn').addEventListener('click', async () => { const startDate = new Date(document.getElementById('startDate').value); const endDate = new Date(document.getElementById('endDate').value); endDate.setHours(23, 59, 59, 999); const { allAttendance, allEmployees } = await fetchAllDataForReport(); const filteredData = allAttendance.filter(rec => rec.markIn >= startDate && rec.markIn <= endDate); displayPayrollReport(filteredData, allEmployees); });
+        function displayPayrollReport(data, employees) {
+    const outputDiv = document.getElementById('report-output');
+    const tableContainer = document.getElementById('report-table-container');
+    const actionsContainer = document.getElementById('report-actions');
+    const payrollSummary = {};
+
+    employees.forEach(emp => {
+        // Initialize structures for both days and hours for all employees
+        payrollSummary[emp.id] = { 
+            name: emp.Name, 
+            dept: emp.DEPT || 'N/A', 
+            totalDays: 0,
+            totalMilliseconds: 0 // New field to track total time
+        };
+    });
+
+    data.forEach(rec => {
+        if (payrollSummary[rec.employeeId] && rec.markIn && rec.markOut) {
+            const durationMs = rec.markOut - rec.markIn;
+            
+            // --- NEW LOGIC: Calculate both days and hours ---
+            if (durationMs > 0) {
+                // Always add the raw time for PT employees
+                payrollSummary[rec.employeeId].totalMilliseconds += durationMs;
+
+                // Calculate days for non-PT employees
+                const durationHours = durationMs / 3600000;
+                if (durationHours >= 6) {
+                    payrollSummary[rec.employeeId].totalDays += 1;
+                } else {
+                    payrollSummary[rec.employeeId].totalDays += 0.5;
+                }
+            }
+        }
+    });
+
+    if (employees.length === 0) {
+        tableContainer.innerHTML = "<p>No employees found.</p>";
+        actionsContainer.innerHTML = "";
+    } else {
+        // --- MODIFICATION: Dynamically change the last column header and data ---
+        let table = `<table id="payrollReportTable" class="report-table">
+                        <thead>
+                            <tr>
+                                <th class="col-id">ID</th>
+                                <th>Name</th>
+                                <th class="col-dept">Dept</th>
+                                <th class="col-days">Total (Days/Hours)</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+        
+        for (const empId in payrollSummary) {
+            const empData = payrollSummary[empId];
+            let summaryValue;
+
+            // Check if the employee is in the 'PT' department
+            if (empData.dept.toUpperCase() === 'PT') {
+                const totalHours = (empData.totalMilliseconds / 3600000).toFixed(2);
+                summaryValue = `${totalHours} hrs`; // Format as hours
+            } else {
+                summaryValue = empData.totalDays; // Use total days for everyone else
+            }
+            
+            table += `<tr>
+                        <td>${empId}</td>
+                        <td>${empData.name}</td>
+                        <td>${empData.dept}</td>
+                        <td>${summaryValue}</td>
+                      </tr>`;
+        }
+        
+        table += '</tbody></table>';
+        tableContainer.innerHTML = table;
+        actionsContainer.innerHTML = `<button class="btn" onclick="downloadTableAsPDF('payrollReportTable', 'Payroll_Summary_Report')">PDF</button> <button class="btn" onclick="downloadTableAsExcel('payrollReportTable', 'Payroll_Summary_Report')">Excel</button>`;
+    }
+    outputDiv.style.display = 'block';
+}
+        
+        document.getElementById('generateDetailedReportBtn').addEventListener('click', async () => { const employeeId = document.getElementById('detailedEmployeeId').value.trim().toUpperCase(); const monthYear = document.getElementById('reportMonth').value; if (!employeeId || !monthYear) { return alert('Please provide ID and month.'); } const [year, month] = monthYear.split('-'); const { allAttendance, allEmployees } = await fetchAllDataForReport(); const employeeInfo = allEmployees.find(emp => emp.id === employeeId); if (!employeeInfo) { return alert('Employee ID not found.'); } const employeeRecords = allAttendance.filter(rec => { const recDate = rec.markIn; return rec.employeeId === employeeId && recDate.getFullYear() == year && (recDate.getMonth() + 1) == parseInt(month); }); displayDetailedReport(employeeRecords, employeeInfo, monthYear); });
+        function displayDetailedReport(data, employeeInfo, monthYear) { const outputDiv = document.getElementById('detailed-report-output'); const summaryContainer = document.getElementById('detailed-report-summary'); const tableContainer = document.getElementById('detailed-report-table-container'); const actionsContainer = document.getElementById('detailed-report-actions'); outputDiv.style.display = 'block'; if (data.length === 0) { summaryContainer.innerHTML = `<p>No records found for ${employeeInfo.Name} (${employeeInfo.id}) for this month.</p>`; tableContainer.innerHTML = ""; actionsContainer.innerHTML = ""; return; } let totalMilliseconds = 0; let tableHTML = `<table id="detailedReportTable" class="report-table"><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Duration</th></tr></thead><tbody>`; data.sort((a, b) => a.markIn - b.markIn); data.forEach(rec => { const markInTime = rec.markIn; const markOutTime = rec.markOut; let durationStr = 'N/A'; if (markOutTime) { const durationMs = markOutTime - markInTime; totalMilliseconds += durationMs; const hours = Math.floor(durationMs / 3600000); const minutes = Math.floor((durationMs % 3600000) / 60000); durationStr = `${hours}h ${minutes}m`; } tableHTML += `<tr><td>${rec.date}</td><td>${markInTime.toLocaleTimeString()}</td><td>${markOutTime ? markOutTime.toLocaleTimeString() : 'N/A'}</td><td>${durationStr}</td></tr>`; }); tableHTML += '</tbody></table>'; const totalHours = totalMilliseconds / 3600000; const avgHours = data.length > 0 ? totalHours / data.length : 0; summaryContainer.innerHTML = `<p><strong>Employee:</strong> ${employeeInfo.Name} (${employeeInfo.id})</p><p><strong>Total Days:</strong> ${data.length}</p><p><strong>Total Hours:</strong> ${totalHours.toFixed(2)}</p><p><strong>Avg Hours:</strong> ${avgHours.toFixed(2)}</p>`; tableContainer.innerHTML = tableHTML; const reportTitle = `Detailed_Report_${employeeInfo.id}_${monthYear}`; actionsContainer.innerHTML = `<button class="btn" onclick="downloadDetailedPDF('${reportTitle}')">PDF</button> <button class="btn" onclick="downloadDetailedExcel('${reportTitle}')">Excel</button>`; }
+        
+        window.downloadTableAsPDF = function(tableId, title) { const { jsPDF } = window.jspdf; const doc = new jsPDF(); doc.autoTable({ html: `#${tableId}` }); doc.save(`${title}.pdf`); }
+        window.downloadTableAsExcel = function(tableId, title) { const table = document.getElementById(tableId); const sheetName = title.replace(/_/g, ' '); const wb = XLSX.utils.table_to_book(table, { sheet: sheetName }); XLSX.writeFile(wb, `${title}.xlsx`); }
+        window.downloadDetailedPDF = function(title) { const { jsPDF } = window.jspdf; const doc = new jsPDF(); const summaryText = document.getElementById('detailed-report-summary').innerText; doc.text(summaryText, 14, 20); doc.autoTable({ html: '#detailedReportTable', startY: doc.autoTable.previous.finalY + 10 || 50 }); doc.save(`${title}.pdf`); }
+        window.downloadDetailedExcel = function(title) { const table = document.getElementById('detailedReportTable'); const wb = XLSX.utils.table_to_book(table, { sheet: "Detailed Report" }); XLSX.writeFile(wb, `${title}.xlsx`); }
+
+        window.addEventListener('hashchange', handleViewChange); handleViewChange();
+
+        // --- PWA SERVICE WORKER REGISTRATION ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    });
+    </script>
+    </body>
+</html>
